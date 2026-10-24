@@ -1,0 +1,169 @@
+# Warden-AI: Strict-Control AI Harness & Security Gateway
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-v18%2B-green.svg)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7%2B-blue.svg)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-18.3-cyan.svg)](https://react.dev/)
+[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.4-38bdf8.svg)](https://tailwindcss.com/)
+
+> **Zero-Trust Reverse Proxy & Real-Time Human-in-the-Loop Gateway for Autonomous AI Coding Agents and Model Context Protocol (MCP) Tool Calls.**
+
+---
+
+## 🛡️ Why Warden-AI?
+
+Autonomous AI coding agents (such as Cursor, Claude Desktop, and CLI agents) are increasingly equipped with broad write permissions to local filesystems and shell execution environments. When prompt injection attacks, supply-chain vulnerabilities, or agent hallucinations occur, an agent can silently modify critical code, alter `.env` secrets, or run destructive terminal commands.
+
+**Warden-AI** acts as an air-gapped security harness between autonomous AI agents and your local environment. It intercepts tool execution requests, freezes the agent's HTTP connection in memory via the **Async Hold Pattern**, and forces all filesystem mutations and terminal commands through a human-in-the-loop React approval dashboard before any code touches your disk.
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart LR
+    A[Autonomous AI Agent<br/>Cursor / MCP Client] -->|POST /api/mcp/execute| B(Warden-AI Reverse Proxy)
+    
+    subgraph "Zero-Trust Gateway"
+        B -->|Async Promise Hold| C[Pending Requests Map]
+        B -->|Insert 'pending'| D[(SQLite Audit Trail<br/>WAL Mode)]
+        B -->|WebSocket Broadcast| E[WebSocket Server]
+    end
+    
+    E -->|Real-Time Event| F[React Command Center]
+    
+    subgraph "Human-in-the-Loop Operator"
+        F -->|Inspect Visual Diff| G{Human Decision}
+        G -->|Approve| H[Emit 'approved']
+        G -->|Reject| I[Emit 'rejected']
+    end
+    
+    H -->|WS Message| E
+    I -->|WS Message| E
+    
+    E -->|Resolve Promise| C
+    C -->|HTTP 200 Success| A
+    C -->|HTTP 403 Forbidden| A
+```
+
+---
+
+## ✨ Key Features
+
+- **The Async Hold Pattern:** Traps incoming agent HTTP tool calls inside unresolved JavaScript promises. Zero polling overhead, sub-millisecond dispatch, and fully transparent to MCP clients.
+- **Side-by-Side Payload Diff Inspector:** Embedded visual diff engine (`react-diff-viewer-continued`) highlights proposed additions and deletions before execution.
+- **Real-Time Control Plane:** Bidirectional WebSocket stream instantly notifies the operator and unblocks waiting CLI processes upon human approval.
+- **Immutable SQLite Audit Trail:** Every single tool call is cryptographically timestamped and persisted locally in SQLite (`audit_logs`) with status, agent name, and exact payload parameters.
+- **Zero Cloud Dependencies:** 100% local execution. No telemetry, no external database dependencies, and no Docker requirement.
+
+---
+
+## 📁 Repository Structure
+
+```text
+Warden-AI/
+├── backend/
+│   ├── src/
+│   │   ├── index.ts           # Express & WebSocket server entrypoint
+│   │   ├── db/
+│   │   │   └── client.ts      # SQLite audit trail initialization & queries
+│   │   ├── proxy/
+│   │   │   └── interceptor.ts # Async request holding logic & MCP route
+│   │   └── ws/
+│   │       └── socket.ts      # WebSocket server & approval dispatcher
+│   ├── scripts/
+│   │   └── test-agent.ts      # Mock autonomous AI agent simulator
+│   ├── package.json
+│   └── tsconfig.json
+├── frontend/
+│   ├── src/
+│   │   ├── App.tsx            # Main Zero-Trust Command Center UI
+│   │   ├── components/
+│   │   │   ├── RequestCard.tsx# Intercepted action card & decision gates
+│   │   │   └── DiffViewer.tsx # Visual payload & code diff inspector
+│   │   └── hooks/
+│   │       └── useWebSocket.ts# Real-time WebSocket state management
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tailwind.config.js
+│   └── tsconfig.json
+└── README.md
+```
+
+---
+
+## 🚀 Quick Start Guide
+
+### Prerequisites
+- **Node.js**: v18.0.0 or newer
+- **npm** or **pnpm** / **yarn**
+
+---
+
+### Step 1: Clone the Repository
+```bash
+git clone https://github.com/hariom123-dev/Warden-AI.git
+cd Warden-AI
+```
+
+---
+
+### Step 2: Start the Backend Gateway (Terminal 1)
+```bash
+cd backend
+npm install
+npm run dev
+```
+> Server will listen on **`http://localhost:3001`** and mount the WebSocket control stream.
+
+---
+
+### Step 3: Start the React Security Dashboard (Terminal 2)
+```bash
+cd frontend
+npm install
+npm run dev
+```
+> Open your browser to **`http://localhost:5173`**. The dashboard will display **"System Secure: No pending AI actions"**.
+
+---
+
+### Step 4: Run the Mock Autonomous Agent (Terminal 3)
+```bash
+cd backend
+npm run test:agent
+```
+
+### Observation:
+1. **Terminal 3 pauses and holds:** The agent prints `STATUS: WAITING FOR HUMAN OPERATOR APPROVAL` with an active timer.
+2. **Dashboard lights up:** The intercepted tool call pops up in the React dashboard with the file path (`src/core/auth.ts`) and proposed code diff.
+3. **Approve or Reject:** Click **"Approve Action"** to unblock the agent with HTTP 200, or **"Reject Action"** to abort the operation with HTTP 403.
+
+---
+
+## 🔒 Security & Audit Schema
+
+All requests are logged immutably to `audit.db` using Write-Ahead Logging (WAL):
+
+```sql
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id TEXT PRIMARY KEY,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    agent_name TEXT,
+    action_type TEXT,
+    payload TEXT,
+    status TEXT -- 'pending', 'approved', 'rejected'
+);
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome! Feel free to check out the [issues page](https://github.com/hariom123-dev/Warden-AI/issues).
+
+---
+
+## 📄 License
+
+This project is open-source software licensed under the [MIT License](LICENSE).
